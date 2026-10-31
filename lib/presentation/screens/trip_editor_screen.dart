@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/trips_provider.dart';
 import 'trip_detail_screen.dart';
 
-class TripEditorScreen extends StatefulWidget {
+class TripEditorScreen extends ConsumerStatefulWidget {
   const TripEditorScreen({super.key});
 
   @override
-  State<TripEditorScreen> createState() => _TripEditorScreenState();
+  ConsumerState<TripEditorScreen> createState() => _TripEditorScreenState();
 }
 
-class _TripEditorScreenState extends State<TripEditorScreen> {
+class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _destinationController = TextEditingController();
@@ -56,7 +58,9 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
 
     final tripName = _nameController.text.trim();
     final destination = _destinationController.text.trim();
-
+    ref
+        .read(tripsProvider.notifier)
+        .addTrip(TripSummary(name: tripName, destination: destination));
     // Temporary navigation until SQLite is integrated.
     Navigator.pushReplacement(
       context,
