@@ -11,8 +11,29 @@ class TripsNotifier extends Notifier<List<TripSummary>> {
   @override
   List<TripSummary> build() => [];
 
+  // Add a new trip
   void addTrip(TripSummary trip) {
     state = [...state, trip];
+  }
+
+  // Update an existing trip
+  void updateTrip(int index, TripSummary updatedTrip) {
+    if (index < 0 || index >= state.length) return;
+
+    final updatedTrips = [...state];
+    updatedTrips[index] = updatedTrip;
+
+    state = updatedTrips;
+  }
+
+  // Delete an existing trip
+  void deleteTrip(int index) {
+    if (index < 0 || index >= state.length) return;
+
+    state = [
+      for (var i = 0; i < state.length; i++)
+        if (i != index) state[i],
+    ];
   }
 }
 
