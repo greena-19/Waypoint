@@ -1,5 +1,6 @@
-
 import 'package:flutter/material.dart';
+
+import 'trip_detail_screen.dart';
 
 class TripEditorScreen extends StatefulWidget {
   const TripEditorScreen({super.key});
@@ -31,31 +32,37 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
-      initialDateRange: _dateRange ??
-          DateTimeRange(start: now, end: now),
+      initialDateRange: _dateRange ?? DateTimeRange(start: now, end: now),
     );
 
     if (selected != null && mounted) {
-      setState(() => _dateRange = selected);
+      setState(() {
+        _dateRange = selected;
+      });
     }
   }
 
   void _saveTrip() {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_dateRange == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select trip dates'),
-        ),
-      );
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    // SQLite persistence will be connected next.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Trip form validated successfully'),
+    if (_dateRange == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select trip dates')));
+      return;
+    }
+
+    final tripName = _nameController.text.trim();
+    final destination = _destinationController.text.trim();
+
+    // Temporary navigation until SQLite is integrated.
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            TripDetailScreen(tripName: tripName, destination: destination),
       ),
     );
   }
@@ -77,16 +84,21 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
               ),
               validator: (value) {
                 final name = value?.trim() ?? '';
+
                 if (name.isEmpty) {
                   return 'Enter a trip name';
                 }
+
                 if (name.length > 40) {
                   return 'Maximum 40 characters';
                 }
+
                 return null;
               },
             ),
+
             const SizedBox(height: 16),
+
             TextFormField(
               controller: _destinationController,
               decoration: const InputDecoration(
@@ -95,16 +107,21 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
               ),
               validator: (value) {
                 final destination = value?.trim() ?? '';
+
                 if (destination.isEmpty) {
                   return 'Enter a destination';
                 }
+
                 if (destination.length > 60) {
                   return 'Maximum 60 characters';
                 }
+
                 return null;
               },
             ),
+
             const SizedBox(height: 16),
+
             DropdownButtonFormField<String>(
               initialValue: _tripType,
               decoration: const InputDecoration(
@@ -112,14 +129,8 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(
-                  value: 'day',
-                  child: Text('Day Trip'),
-                ),
-                DropdownMenuItem(
-                  value: 'weekend',
-                  child: Text('Weekend Trip'),
-                ),
+                DropdownMenuItem(value: 'day', child: Text('Day Trip')),
+                DropdownMenuItem(value: 'weekend', child: Text('Weekend Trip')),
                 DropdownMenuItem(
                   value: 'multi_day',
                   child: Text('Multi-day Trip'),
@@ -127,11 +138,15 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
               ],
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => _tripType = value);
+                  setState(() {
+                    _tripType = value;
+                  });
                 }
               },
             ),
+
             const SizedBox(height: 16),
+
             OutlinedButton.icon(
               onPressed: _pickDates,
               icon: const Icon(Icons.calendar_month),
@@ -139,18 +154,21 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
                 _dateRange == null
                     ? 'Select Trip Dates'
                     : '${_dateRange!.start.month}/'
-                      '${_dateRange!.start.day}/'
-                      '${_dateRange!.start.year} - '
-                      '${_dateRange!.end.month}/'
-                      '${_dateRange!.end.day}/'
-                      '${_dateRange!.end.year}',
+                          '${_dateRange!.start.day}/'
+                          '${_dateRange!.start.year} - '
+                          '${_dateRange!.end.month}/'
+                          '${_dateRange!.end.day}/'
+                          '${_dateRange!.end.year}',
               ),
             ),
+
             const SizedBox(height: 24),
+
             Text(
               'Budget: \$${_budget.round()}',
               style: Theme.of(context).textTheme.titleMedium,
             ),
+
             Slider(
               value: _budget,
               min: 0,
@@ -158,10 +176,14 @@ class _TripEditorScreenState extends State<TripEditorScreen> {
               divisions: 100,
               label: '\$${_budget.round()}',
               onChanged: (value) {
-                setState(() => _budget = value);
+                setState(() {
+                  _budget = value;
+                });
               },
             ),
+
             const SizedBox(height: 24),
+
             FilledButton.icon(
               onPressed: _saveTrip,
               icon: const Icon(Icons.save),
