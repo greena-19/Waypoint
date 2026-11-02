@@ -96,9 +96,11 @@ class TripsScreen extends ConsumerWidget {
                       children: [
                         Text(trip.destination),
                         Text(
-                          '${trip.startDate.month}/${trip.startDate.day}/'
+                          '${trip.startDate.month}/'
+                          '${trip.startDate.day}/'
                           '${trip.startDate.year} - '
-                          '${trip.endDate.month}/${trip.endDate.day}/'
+                          '${trip.endDate.month}/'
+                          '${trip.endDate.day}/'
                           '${trip.endDate.year}',
                         ),
                         Text('Budget: \$${trip.budget.round()}'),
@@ -110,13 +112,16 @@ class TripsScreen extends ConsumerWidget {
                         IconButton(
                           icon: const Icon(Icons.edit_outlined),
                           tooltip: 'Edit Trip',
-                          onPressed: () => _editTrip(context, ref, index, trip),
+                          onPressed: () {
+                            _editTrip(context, ref, index, trip);
+                          },
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline),
                           tooltip: 'Delete Trip',
-                          onPressed: () =>
-                              _deleteTrip(context, ref, index, trip),
+                          onPressed: () {
+                            _deleteTrip(context, ref, index, trip);
+                          },
                         ),
                       ],
                     ),
@@ -124,10 +129,7 @@ class TripsScreen extends ConsumerWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => TripDetailScreen(
-                            tripName: trip.name,
-                            destination: trip.destination,
-                          ),
+                          builder: (context) => TripDetailScreen(trip: trip),
                         ),
                       );
                     },
@@ -183,7 +185,9 @@ class _EditTripDialogState extends State<_EditTripDialog> {
   }
 
   void _saveChanges() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     final updatedTrip = widget.trip.copyWith(
       name: _nameController.text.trim(),
@@ -220,7 +224,9 @@ class _EditTripDialogState extends State<_EditTripDialog> {
                   return null;
                 },
               ),
+
               const SizedBox(height: 12),
+
               TextFormField(
                 controller: _destinationController,
                 decoration: const InputDecoration(labelText: 'Destination'),
@@ -244,7 +250,9 @@ class _EditTripDialogState extends State<_EditTripDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pop(context);
+          },
           child: const Text('Cancel'),
         ),
         FilledButton(

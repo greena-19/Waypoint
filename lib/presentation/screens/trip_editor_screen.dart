@@ -77,12 +77,7 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
     // Temporary navigation until SQLite integration.
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (context) => TripDetailScreen(
-          tripName: newTrip.name,
-          destination: newTrip.destination,
-        ),
-      ),
+      MaterialPageRoute(builder: (context) => TripDetailScreen(trip: newTrip)),
     );
   }
 
