@@ -13,6 +13,7 @@ class TripEditorScreen extends ConsumerStatefulWidget {
 
 class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _nameController = TextEditingController();
   final _destinationController = TextEditingController();
 
@@ -37,7 +38,9 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
       initialDateRange: _dateRange ?? DateTimeRange(start: now, end: now),
     );
 
-    if (selected != null && mounted) {
+    if (!mounted) return;
+
+    if (selected != null) {
       setState(() {
         _dateRange = selected;
       });
@@ -58,15 +61,27 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
 
     final tripName = _nameController.text.trim();
     final destination = _destinationController.text.trim();
-    ref
-        .read(tripsProvider.notifier)
-        .addTrip(TripSummary(name: tripName, destination: destination));
-    // Temporary navigation until SQLite is integrated.
+
+    final newTrip = TripSummary(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: tripName,
+      destination: destination,
+      startDate: _dateRange!.start,
+      endDate: _dateRange!.end,
+      tripType: _tripType,
+      budget: _budget,
+    );
+
+    ref.read(tripsProvider.notifier).addTrip(newTrip);
+
+    // Temporary navigation until SQLite integration.
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            TripDetailScreen(tripName: tripName, destination: destination),
+        builder: (context) => TripDetailScreen(
+          tripName: newTrip.name,
+          destination: newTrip.destination,
+        ),
       ),
     );
   }
@@ -80,6 +95,7 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Trip Name
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -103,6 +119,7 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
 
             const SizedBox(height: 16),
 
+            // Destination
             TextFormField(
               controller: _destinationController,
               decoration: const InputDecoration(
@@ -126,6 +143,7 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
 
             const SizedBox(height: 16),
 
+            // Trip Type
             DropdownButtonFormField<String>(
               initialValue: _tripType,
               decoration: const InputDecoration(
@@ -151,6 +169,7 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
 
             const SizedBox(height: 16),
 
+            // Trip Dates
             OutlinedButton.icon(
               onPressed: _pickDates,
               icon: const Icon(Icons.calendar_month),
@@ -168,6 +187,7 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
 
             const SizedBox(height: 24),
 
+            // Budget
             Text(
               'Budget: \$${_budget.round()}',
               style: Theme.of(context).textTheme.titleMedium,
@@ -188,6 +208,7 @@ class _TripEditorScreenState extends ConsumerState<TripEditorScreen> {
 
             const SizedBox(height: 24),
 
+            // Save Trip
             FilledButton.icon(
               onPressed: _saveTrip,
               icon: const Icon(Icons.save),

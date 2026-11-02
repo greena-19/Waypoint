@@ -36,22 +36,20 @@ class TripsScreen extends ConsumerWidget {
   ) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Delete Trip'),
-          content: Text('Are you sure you want to delete "${trip.name}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Trip'),
+        content: Text('Are you sure you want to delete "${trip.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
 
     if (!context.mounted || shouldDelete != true) return;
@@ -93,23 +91,32 @@ class TripsScreen extends ConsumerWidget {
                   child: ListTile(
                     leading: const Icon(Icons.location_on),
                     title: Text(trip.name),
-                    subtitle: Text(trip.destination),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(trip.destination),
+                        Text(
+                          '${trip.startDate.month}/${trip.startDate.day}/'
+                          '${trip.startDate.year} - '
+                          '${trip.endDate.month}/${trip.endDate.day}/'
+                          '${trip.endDate.year}',
+                        ),
+                        Text('Budget: \$${trip.budget.round()}'),
+                      ],
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
                           icon: const Icon(Icons.edit_outlined),
                           tooltip: 'Edit Trip',
-                          onPressed: () {
-                            _editTrip(context, ref, index, trip);
-                          },
+                          onPressed: () => _editTrip(context, ref, index, trip),
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline),
                           tooltip: 'Delete Trip',
-                          onPressed: () {
-                            _deleteTrip(context, ref, index, trip);
-                          },
+                          onPressed: () =>
+                              _deleteTrip(context, ref, index, trip),
                         ),
                       ],
                     ),
@@ -141,9 +148,6 @@ class TripsScreen extends ConsumerWidget {
     );
   }
 }
-
-// Separate StatefulWidget for the Edit Trip dialog.
-// It safely manages and disposes the text controllers.
 
 class _EditTripDialog extends StatefulWidget {
   final TripSummary trip;
@@ -181,7 +185,7 @@ class _EditTripDialogState extends State<_EditTripDialog> {
   void _saveChanges() {
     if (!_formKey.currentState!.validate()) return;
 
-    final updatedTrip = TripSummary(
+    final updatedTrip = widget.trip.copyWith(
       name: _nameController.text.trim(),
       destination: _destinationController.text.trim(),
     );
@@ -203,9 +207,16 @@ class _EditTripDialogState extends State<_EditTripDialog> {
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Trip Name'),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
+                  final name = value?.trim() ?? '';
+
+                  if (name.isEmpty) {
                     return 'Please enter a trip name';
                   }
+
+                  if (name.length > 40) {
+                    return 'Maximum 40 characters';
+                  }
+
                   return null;
                 },
               ),
@@ -214,9 +225,16 @@ class _EditTripDialogState extends State<_EditTripDialog> {
                 controller: _destinationController,
                 decoration: const InputDecoration(labelText: 'Destination'),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
+                  final destination = value?.trim() ?? '';
+
+                  if (destination.isEmpty) {
                     return 'Please enter a destination';
                   }
+
+                  if (destination.length > 60) {
+                    return 'Maximum 60 characters';
+                  }
+
                   return null;
                 },
               ),
@@ -226,9 +244,7 @@ class _EditTripDialogState extends State<_EditTripDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(
