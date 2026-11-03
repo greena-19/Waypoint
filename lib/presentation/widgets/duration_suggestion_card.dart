@@ -16,6 +16,14 @@ class DurationSuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final difference = suggestedDurationMinutes - currentDurationMinutes;
+
+    final differenceText = difference > 0
+        ? '$difference minutes longer'
+        : difference < 0
+        ? '${difference.abs()} minutes shorter'
+        : 'Same as your current duration';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -23,32 +31,60 @@ class DurationSuggestionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.auto_awesome_outlined),
                 const SizedBox(width: 8),
-                Text(
-                  'Smart Duration Suggestion',
-                  style: Theme.of(context).textTheme.titleMedium,
+                Expanded(
+                  child: Text(
+                    'Smart Duration Suggestion',
+                    softWrap: true,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text('Current duration: $currentDurationMinutes minutes'),
-            const SizedBox(height: 4),
+
+            const SizedBox(height: 16),
+
+            Text(
+              'Current duration: $currentDurationMinutes minutes',
+              softWrap: true,
+            ),
+
+            const SizedBox(height: 8),
+
             Text(
               'Suggested duration: $suggestedDurationMinutes minutes',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              softWrap: true,
+              style: Theme.of(context).textTheme.bodyLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
-            const Text('Would you like to use the suggested duration?'),
+
+            const SizedBox(height: 8),
+
+            Text(differenceText, style: Theme.of(context).textTheme.bodySmall),
+
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(onPressed: onDismiss, child: const Text('Not now')),
-                const SizedBox(width: 8),
-                FilledButton(onPressed: onApply, child: const Text('Apply')),
-              ],
+
+            const Text('Would you like to use the suggested duration?'),
+
+            const SizedBox(height: 16),
+
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: onDismiss,
+                    child: const Text('Not now'),
+                  ),
+                  FilledButton(onPressed: onApply, child: const Text('Apply')),
+                ],
+              ),
             ),
           ],
         ),

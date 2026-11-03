@@ -19,7 +19,9 @@ void main() {
       );
 
       expect(find.text('Current duration: 60 minutes'), findsOneWidget);
+
       expect(find.text('Suggested duration: 90 minutes'), findsOneWidget);
+
       expect(find.text('Apply'), findsOneWidget);
       expect(find.text('Not now'), findsOneWidget);
     });
@@ -33,7 +35,9 @@ void main() {
             body: DurationSuggestionCard(
               currentDurationMinutes: 60,
               suggestedDurationMinutes: 90,
-              onApply: () => applied = true,
+              onApply: () {
+                applied = true;
+              },
               onDismiss: () {},
             ),
           ),
@@ -56,7 +60,9 @@ void main() {
               currentDurationMinutes: 60,
               suggestedDurationMinutes: 90,
               onApply: () {},
-              onDismiss: () => dismissed = true,
+              onDismiss: () {
+                dismissed = true;
+              },
             ),
           ),
         ),
@@ -66,6 +72,40 @@ void main() {
       await tester.pump();
 
       expect(dismissed, isTrue);
+    });
+
+    testWidgets('shows when suggested duration is longer', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DurationSuggestionCard(
+              currentDurationMinutes: 60,
+              suggestedDurationMinutes: 90,
+              onApply: () {},
+              onDismiss: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('30 minutes longer'), findsOneWidget);
+    });
+
+    testWidgets('shows when suggested duration is shorter', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DurationSuggestionCard(
+              currentDurationMinutes: 120,
+              suggestedDurationMinutes: 90,
+              onApply: () {},
+              onDismiss: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('30 minutes shorter'), findsOneWidget);
     });
   });
 }
