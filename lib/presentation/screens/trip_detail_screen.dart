@@ -62,6 +62,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
 
     if (!mounted || updatedStop == null) return;
 
+    final stopStillExists = ref
+        .read(stopsProvider)
+        .any((stop) => stop.id == existingStop.id);
+
+    if (!stopStillExists) return;
+
     ref.read(stopsProvider.notifier).updateStop(updatedStop);
 
     ScaffoldMessenger.of(
@@ -90,6 +96,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
 
     if (!mounted || shouldDelete != true) return;
 
+    final stopStillExists = ref
+        .read(stopsProvider)
+        .any((item) => item.id == stop.id);
+
+    if (!stopStillExists) return;
+
     ref.read(stopsProvider.notifier).deleteStop(stop.id);
 
     ScaffoldMessenger.of(
@@ -99,7 +111,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final trip = widget.trip;
+    final trips = ref.watch(tripsProvider);
+
+    final tripIndex = trips.indexWhere((item) => item.id == widget.trip.id);
+
+    // Use the latest trip details when available.
+    final trip = tripIndex >= 0 ? trips[tripIndex] : widget.trip;
 
     final stops = ref
         .watch(stopsProvider)
@@ -109,7 +126,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Trip Details')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         children: [
           Card(
             child: Padding(
@@ -119,14 +136,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                 children: [
                   Text(
                     trip.name,
+                    softWrap: true,
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 12),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.location_on_outlined),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(trip.destination)),
+                      Expanded(child: Text(trip.destination, softWrap: true)),
                     ],
                   ),
                 ],
@@ -145,6 +164,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                   subtitle: Text(
                     '${_formatDate(trip.startDate)} - '
                     '${_formatDate(trip.endDate)}',
+                    softWrap: true,
                   ),
                 ),
                 const Divider(),
@@ -184,9 +204,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                       color: Colors.grey,
                     ),
                     SizedBox(height: 12),
-                    Text('No stops added yet'),
+                    Text('No stops added yet', textAlign: TextAlign.center),
                     SizedBox(height: 4),
-                    Text('Add your first stop to start planning.'),
+                    Text(
+                      'Add your first stop to start planning.',
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               ),
@@ -197,21 +220,30 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                 key: ValueKey(stop.id),
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   leading: const Icon(Icons.place_outlined),
-                  title: Text(stop.name),
+                  title: Text(stop.name, softWrap: true),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(stop.location),
+                      Text(stop.location, softWrap: true),
+                      const SizedBox(height: 4),
                       Text(
                         'Duration: '
                         '${stop.plannedDurationMinutes} minutes',
+                        softWrap: true,
                       ),
-                      if (stop.notes.isNotEmpty) Text('Notes: ${stop.notes}'),
+                      if (stop.notes.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text('Notes: ${stop.notes}', softWrap: true),
+                      ],
                     ],
                   ),
                   trailing: PopupMenuButton<String>(
-                    tooltip: 'Stop options',
+                    tooltip: 'Options for ${stop.name}',
                     onSelected: (value) {
                       if (value == 'edit') {
                         _editStop(stop);
@@ -232,9 +264,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
             }),
         ],
       ),
-
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addStop,
+        tooltip: 'Add a stop to this trip',
         icon: const Icon(Icons.add_location_alt_outlined),
         label: const Text('Add Stop'),
       ),
