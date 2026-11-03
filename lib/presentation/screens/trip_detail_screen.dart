@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/trip_stop.dart';
+import '../providers/stops_provider.dart';
 import '../providers/trips_provider.dart';
 import 'stop_editor_screen.dart';
 
-class TripDetailScreen extends StatefulWidget {
+class TripDetailScreen extends ConsumerStatefulWidget {
   final TripSummary trip;
 
   const TripDetailScreen({super.key, required this.trip});
 
   @override
-  State<TripDetailScreen> createState() => _TripDetailScreenState();
+  ConsumerState<TripDetailScreen> createState() => _TripDetailScreenState();
 }
 
-class _TripDetailScreenState extends State<TripDetailScreen> {
-  final List<TripStop> _stops = [];
-
+class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
   String _formatDate(DateTime date) {
     return '${date.month}/${date.day}/${date.year}';
   }
@@ -43,17 +43,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
     if (!mounted || newStop == null) return;
 
-    setState(() {
-      _stops.add(newStop);
-    });
+    ref.read(stopsProvider.notifier).addStop(newStop);
 
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Stop added successfully')));
   }
 
-  Future<void> _editStop(int index) async {
-    final existingStop = _stops[index];
-
+  Future<void> _editStop(TripStop existingStop) async {
     final updatedStop = await Navigator.push<TripStop>(
       context,
       MaterialPageRoute(
@@ -66,18 +62,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
     if (!mounted || updatedStop == null) return;
 
-    setState(() {
-      _stops[index] = updatedStop;
-    });
+    ref.read(stopsProvider.notifier).updateStop(updatedStop);
 
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Stop updated successfully')));
   }
 
-  Future<void> _deleteStop(int index) async {
-    final stop = _stops[index];
-
+  Future<void> _deleteStop(TripStop stop) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -85,15 +77,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         content: Text('Are you sure you want to delete "${stop.name}"?'),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, false);
-            },
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, true);
-            },
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Delete'),
           ),
         ],
@@ -102,9 +90,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
     if (!mounted || shouldDelete != true) return;
 
-    setState(() {
-      _stops.removeAt(index);
-    });
+    ref.read(stopsProvider.notifier).deleteStop(stop.id);
 
     ScaffoldMessenger.of(
       context,
@@ -115,12 +101,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   Widget build(BuildContext context) {
     final trip = widget.trip;
 
+    final stops = ref
+        .watch(stopsProvider)
+        .where((stop) => stop.tripId == trip.id)
+        .toList();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Trip Details')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Trip information
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -146,7 +136,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
           const SizedBox(height: 20),
 
-          // Trip details
           Card(
             child: Column(
               children: [
@@ -176,16 +165,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
           const SizedBox(height: 24),
 
-          // Trip Stops heading
           Text(
-            'Trip Stops (${_stops.length})',
+            'Trip Stops (${stops.length})',
             style: Theme.of(context).textTheme.titleLarge,
           ),
 
           const SizedBox(height: 16),
 
-          // Empty state
-          if (_stops.isEmpty)
+          if (stops.isEmpty)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
@@ -205,11 +192,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               ),
             )
           else
-            // Display stops with Edit and Delete options
-            ..._stops.asMap().entries.map((entry) {
-              final index = entry.key;
-              final stop = entry.value;
-
+            ...stops.map((stop) {
               return Card(
                 key: ValueKey(stop.id),
                 margin: const EdgeInsets.only(bottom: 12),
@@ -231,9 +214,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     tooltip: 'Stop options',
                     onSelected: (value) {
                       if (value == 'edit') {
-                        _editStop(index);
+                        _editStop(stop);
                       } else if (value == 'delete') {
-                        _deleteStop(index);
+                        _deleteStop(stop);
                       }
                     },
                     itemBuilder: (context) => const [
@@ -250,7 +233,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         ],
       ),
 
-      // Add Stop button
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addStop,
         icon: const Icon(Icons.add_location_alt_outlined),
