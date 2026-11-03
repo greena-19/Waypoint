@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/trip_stop.dart';
 import '../widgets/duration_suggestion_card.dart';
@@ -22,10 +23,12 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
   late final TextEditingController _notesController;
 
   // Temporary demonstration value.
-  // Anuradha's duration calculation will replace this later.
+  // Replace with the real duration calculation
+  // during database and repository integration.
   static const int _demoSuggestedDurationMinutes = 90;
 
   bool _showSuggestion = false;
+  bool _attemptedSave = false;
 
   bool get _isEditing => widget.existingStop != null;
 
@@ -56,11 +59,13 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
   }
 
   void _showDurationSuggestion() {
-    final currentDuration = int.tryParse(_durationController.text.trim());
+    final duration = int.tryParse(_durationController.text.trim());
 
-    if (currentDuration == null || currentDuration <= 0) {
+    if (duration == null || duration < 1 || duration > 10080) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid duration first')),
+        const SnackBar(
+          content: Text('Enter a duration between 1 and 10080 minutes'),
+        ),
       );
       return;
     }
@@ -88,7 +93,13 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
   }
 
   void _saveStop() {
-    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _attemptedSave = true;
+    });
+
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     final stop = TripStop(
       id:
@@ -110,113 +121,143 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? 'Edit Stop' : 'Add Stop')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Stop Name',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.place_outlined),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          autovalidateMode: _attemptedSave
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.all(16),
+            children: [
+              TextFormField(
+                controller: _nameController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                maxLength: 80,
+                decoration: const InputDecoration(
+                  labelText: 'Stop Name',
+                  hintText: 'e.g., Georgia Aquarium',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.place_outlined),
+                ),
+                validator: (value) {
+                  final name = value?.trim() ?? '';
+
+                  if (name.isEmpty) {
+                    return 'Please enter a stop name';
+                  }
+
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter a stop name';
-                }
-                return null;
-              },
-            ),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            TextFormField(
-              controller: _locationController,
-              decoration: const InputDecoration(
-                labelText: 'Location',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.location_on_outlined),
+              TextFormField(
+                controller: _locationController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                maxLength: 120,
+                decoration: const InputDecoration(
+                  labelText: 'Location',
+                  hintText: 'Enter a location or address',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                ),
+                validator: (value) {
+                  final location = value?.trim() ?? '';
+
+                  if (location.isEmpty) {
+                    return 'Please enter a location';
+                  }
+
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter a location';
-                }
-                return null;
-              },
-            ),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            TextFormField(
-              controller: _durationController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Planned Duration (minutes)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.timer_outlined),
+              TextFormField(
+                controller: _durationController,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Planned Duration (minutes)',
+                  hintText: 'e.g., 60',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.timer_outlined),
+                ),
+                onChanged: (_) {
+                  if (_showSuggestion) {
+                    setState(() {
+                      _showSuggestion = false;
+                    });
+                  }
+                },
+                validator: (value) {
+                  final duration = int.tryParse(value?.trim() ?? '');
+
+                  if (duration == null || duration < 1 || duration > 10080) {
+                    return 'Enter 1 to 10080 minutes';
+                  }
+
+                  return null;
+                },
               ),
-              onChanged: (_) {
-                if (_showSuggestion) {
-                  setState(() {
-                    _showSuggestion = false;
-                  });
-                }
-              },
-              validator: (value) {
-                final duration = int.tryParse(value?.trim() ?? '');
 
-                if (duration == null || duration <= 0) {
-                  return 'Enter a valid duration greater than 0';
-                }
-
-                return null;
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            OutlinedButton.icon(
-              onPressed: _showDurationSuggestion,
-              icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('Get Duration Suggestion'),
-            ),
-
-            if (_showSuggestion) ...[
               const SizedBox(height: 12),
-              const Text(
-                'Demo suggestion — calculation not connected yet',
-                style: TextStyle(fontSize: 12),
+
+              OutlinedButton.icon(
+                onPressed: _showDurationSuggestion,
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('Get Duration Suggestion'),
               ),
-              DurationSuggestionCard(
-                currentDurationMinutes: currentDuration,
-                suggestedDurationMinutes: _demoSuggestedDurationMinutes,
-                onApply: _applySuggestion,
-                onDismiss: _dismissSuggestion,
+
+              if (_showSuggestion) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Demo suggestion — calculation not connected yet',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                DurationSuggestionCard(
+                  currentDurationMinutes: currentDuration,
+                  suggestedDurationMinutes: _demoSuggestedDurationMinutes,
+                  onApply: _applySuggestion,
+                  onDismiss: _dismissSuggestion,
+                ),
+              ],
+
+              const SizedBox(height: 16),
+
+              TextFormField(
+                controller: _notesController,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (Optional)',
+                  hintText: 'Add any useful information',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.notes_outlined),
+                ),
               ),
+
+              const SizedBox(height: 24),
+
+              FilledButton.icon(
+                onPressed: _saveStop,
+                icon: const Icon(Icons.save_outlined),
+                label: Text(_isEditing ? 'Save Changes' : 'Save Stop'),
+              ),
+
+              const SizedBox(height: 24),
             ],
-
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _notesController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Notes (Optional)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.notes_outlined),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            FilledButton.icon(
-              onPressed: _saveStop,
-              icon: const Icon(Icons.save_outlined),
-              label: Text(_isEditing ? 'Save Changes' : 'Save Stop'),
-            ),
-          ],
+          ),
         ),
       ),
     );
