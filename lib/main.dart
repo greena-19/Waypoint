@@ -6,9 +6,23 @@ import 'presentation/screens/trips_screen.dart';
 import 'presentation/screens/history_screen.dart';
 import 'presentation/screens/settings_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: WaypointApp()));
+
+  // Create a Riverpod container before starting the app.
+  final container = ProviderContainer();
+
+  // Load the saved theme preference.
+  try {
+    await container.read(themeModeProvider.notifier).loadThemeMode();
+  } catch (error) {
+    debugPrint('Unable to load saved theme: $error');
+  }
+
+  // Start Waypoint with the initialized Riverpod container.
+  runApp(
+    UncontrolledProviderScope(container: container, child: const WaypointApp()),
+  );
 }
 
 class WaypointApp extends ConsumerWidget {
