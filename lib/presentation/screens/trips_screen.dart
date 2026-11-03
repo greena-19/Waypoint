@@ -12,7 +12,6 @@ class TripsScreen extends ConsumerWidget {
   Future<void> _editTrip(
     BuildContext context,
     WidgetRef ref,
-    int index,
     TripSummary trip,
   ) async {
     final updatedTrip = await showDialog<TripSummary>(
@@ -21,6 +20,11 @@ class TripsScreen extends ConsumerWidget {
     );
 
     if (!context.mounted || updatedTrip == null) return;
+
+    final trips = ref.read(tripsProvider);
+    final index = trips.indexWhere((item) => item.id == trip.id);
+
+    if (index == -1) return;
 
     ref.read(tripsProvider.notifier).updateTrip(index, updatedTrip);
 
@@ -32,7 +36,6 @@ class TripsScreen extends ConsumerWidget {
   Future<void> _deleteTrip(
     BuildContext context,
     WidgetRef ref,
-    int index,
     TripSummary trip,
   ) async {
     final shouldDelete = await showDialog<bool>(
@@ -42,15 +45,11 @@ class TripsScreen extends ConsumerWidget {
         content: Text('Are you sure you want to delete "${trip.name}"?'),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, false);
-            },
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, true);
-            },
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Delete'),
           ),
         ],
@@ -59,10 +58,12 @@ class TripsScreen extends ConsumerWidget {
 
     if (!context.mounted || shouldDelete != true) return;
 
-    // Delete the selected trip.
-    ref.read(tripsProvider.notifier).deleteTrip(index);
+    final trips = ref.read(tripsProvider);
+    final index = trips.indexWhere((item) => item.id == trip.id);
 
-    // Delete all stops associated with this trip.
+    if (index == -1) return;
+
+    ref.read(tripsProvider.notifier).deleteTrip(index);
     ref.read(stopsProvider.notifier).deleteStopsForTrip(trip.id);
 
     ScaffoldMessenger.of(
@@ -76,18 +77,27 @@ class TripsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('My Trips')),
-
       body: trips.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.route, size: 80),
-                  SizedBox(height: 16),
-                  Text('Plan your first trip', style: TextStyle(fontSize: 22)),
-                  SizedBox(height: 8),
-                  Text('Your adventures start here!'),
-                ],
+          ? Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.route, size: 72),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Plan your first trip',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Your adventures start here!',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             )
           : ListView.builder(
@@ -97,57 +107,93 @@ class TripsScreen extends ConsumerWidget {
                 final trip = trips[index];
 
                 return Card(
+                  key: ValueKey(trip.id),
                   margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: const Icon(Icons.location_on),
-                    title: Text(trip.name),
-                    subtitle: Column(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(trip.destination),
-                        Text(
-                          '${trip.startDate.month}/'
-                          '${trip.startDate.day}/'
-                          '${trip.startDate.year} - '
-                          '${trip.endDate.month}/'
-                          '${trip.endDate.day}/'
-                          '${trip.endDate.year}',
+                        InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    TripDetailScreen(trip: trip),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 4,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.location_on),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        trip.name,
+                                        softWrap: true,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(trip.destination, softWrap: true),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '${trip.startDate.month}/'
+                                        '${trip.startDate.day}/'
+                                        '${trip.startDate.year} - '
+                                        '${trip.endDate.month}/'
+                                        '${trip.endDate.day}/'
+                                        '${trip.endDate.year}',
+                                        softWrap: true,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text('Budget: \$${trip.budget.round()}'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        Text('Budget: \$${trip.budget.round()}'),
+                        const Divider(),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined),
+                              tooltip: 'Edit Trip',
+                              onPressed: () {
+                                _editTrip(context, ref, trip);
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              tooltip: 'Delete Trip',
+                              onPressed: () {
+                                _deleteTrip(context, ref, trip);
+                              },
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          tooltip: 'Edit Trip',
-                          onPressed: () {
-                            _editTrip(context, ref, index, trip);
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Delete Trip',
-                          onPressed: () {
-                            _deleteTrip(context, ref, index, trip);
-                          },
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TripDetailScreen(trip: trip),
-                        ),
-                      );
-                    },
                   ),
                 );
               },
             ),
-
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
@@ -196,9 +242,7 @@ class _EditTripDialogState extends State<_EditTripDialog> {
   }
 
   void _saveChanges() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     final updatedTrip = widget.trip.copyWith(
       name: _nameController.text.trim(),
@@ -235,9 +279,7 @@ class _EditTripDialogState extends State<_EditTripDialog> {
                   return null;
                 },
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _destinationController,
                 decoration: const InputDecoration(labelText: 'Destination'),
@@ -261,9 +303,7 @@ class _EditTripDialogState extends State<_EditTripDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(
