@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/stops_provider.dart';
 import '../providers/trips_provider.dart';
 import 'trip_detail_screen.dart';
 import 'trip_editor_screen.dart';
@@ -41,11 +42,15 @@ class TripsScreen extends ConsumerWidget {
         content: Text('Are you sure you want to delete "${trip.name}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () {
+              Navigator.pop(dialogContext, false);
+            },
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: () {
+              Navigator.pop(dialogContext, true);
+            },
             child: const Text('Delete'),
           ),
         ],
@@ -54,7 +59,11 @@ class TripsScreen extends ConsumerWidget {
 
     if (!context.mounted || shouldDelete != true) return;
 
+    // Delete the selected trip.
     ref.read(tripsProvider.notifier).deleteTrip(index);
+
+    // Delete all stops associated with this trip.
+    ref.read(stopsProvider.notifier).deleteStopsForTrip(trip.id);
 
     ScaffoldMessenger.of(
       context,
@@ -67,6 +76,7 @@ class TripsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('My Trips')),
+
       body: trips.isEmpty
           ? const Center(
               child: Column(
@@ -137,6 +147,7 @@ class TripsScreen extends ConsumerWidget {
                 );
               },
             ),
+
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
