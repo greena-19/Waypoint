@@ -1,30 +1,72 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:waypoint/data/database/app_database.dart';
+import 'package:waypoint/data/repositories/trip_repository.dart';
 import 'package:waypoint/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  setUp(() async {
+    await AppDatabase.instance.closeDatabase();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    final repository = TripRepository();
+    final trips = await repository.getAllTrips();
+
+    for (final trip in trips) {
+      await repository.deleteTrip(trip.id);
+    }
+
+    await AppDatabase.instance.closeDatabase();
+  });
+
+  tearDown(() async {
+    await AppDatabase.instance.closeDatabase();
+  });
+
+  Future<void> waitForAppToLoad(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      await Future.delayed(const Duration(seconds: 1));
+    });
+
     await tester.pump();
+  }
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('Waypoint displays navigation tabs', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: WaypointApp()),
+    );
+
+    await waitForAppToLoad(tester);
+
+    expect(find.text('My Trips'), findsOneWidget);
+    expect(find.text('Trips'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('Waypoint opens Trip Editor', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: WaypointApp()),
+    );
+
+    await waitForAppToLoad(tester);
+
+    expect(find.byIcon(Icons.add), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Trip'), findsOneWidget);
+    expect(find.text('Trip Name'), findsOneWidget);
+    expect(find.text('Destination'), findsOneWidget);
   });
 }
