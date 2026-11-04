@@ -106,4 +106,46 @@ void main() {
       throwsA(isA<ArgumentError>()),
     );
   });
+
+  test('formats zero minutes', () {
+    expect(durationService.formatDuration(0), '0 minutes');
+  });
+
+  test('formats exactly 60 minutes as one hour', () {
+    expect(durationService.formatDuration(60), '1 hours');
+  });
+
+  test('formats multiple hours and remaining minutes', () {
+    expect(durationService.formatDuration(185), '3 hours 5 minutes');
+  });
+
+  test('uses planned duration when actual duration is zero', () {
+    const stop = StopModel(
+      id: 'stop-5',
+      tripId: 'trip-1',
+      name: 'Museum',
+      location: 'Paris',
+      plannedDuration: 120,
+      actualDuration: 0,
+    );
+
+    expect(durationService.suggestDuration(stop), 120);
+  });
+
+  test('provides feedback when actual duration equals planned duration', () {
+    const stop = StopModel(
+      id: 'stop-6',
+      tripId: 'trip-1',
+      name: 'Museum',
+      location: 'Paris',
+      plannedDuration: 120,
+      actualDuration: 120,
+    );
+
+    expect(
+      durationService.getDurationFeedback(stop),
+      'You spent exactly the planned amount of time.',
+    );
+  });
+
 }
