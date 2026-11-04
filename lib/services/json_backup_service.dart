@@ -1,6 +1,9 @@
 
 import 'dart:convert';
 
+import 'package:sqflite/sqflite.dart';
+
+import '../data/database/app_database.dart';
 import '../data/models/stop_model.dart';
 import '../data/models/trip_model.dart';
 import '../data/repositories/stop_repository.dart';
@@ -9,12 +12,15 @@ import '../data/repositories/trip_repository.dart';
 class JsonBackupService {
   final TripRepository _tripRepository;
   final StopRepository _stopRepository;
+  final AppDatabase _appDatabase;
 
   JsonBackupService({
     TripRepository? tripRepository,
     StopRepository? stopRepository,
+    AppDatabase? appDatabase,
   })  : _tripRepository = tripRepository ?? TripRepository(),
-        _stopRepository = stopRepository ?? StopRepository();
+        _stopRepository = stopRepository ?? StopRepository(),
+        _appDatabase = appDatabase ?? AppDatabase.instance;
 
   /// Exports every trip and its stops as a JSON string.
   Future<String> exportBackup() async {
@@ -40,9 +46,7 @@ class JsonBackupService {
     return const JsonEncoder.withIndent('  ').convert(backup);
   }
 
-  /// Validates and imports a Waypoint JSON backup.
-  /// Existing trips with the same ID are updated.
-  /// Existing stops with the same ID are updated.
+  /// Validates and imports a Waypoint JSON backup atomically.
   Future<int> importBackup(String jsonString) async {
     final dynamic decoded;
 
@@ -56,7 +60,9 @@ class JsonBackupService {
         decoded['app'] != 'Waypoint' ||
         decoded['version'] != 1 ||
         decoded['trips'] is! List) {
-      throw const FormatException('Invalid or unsupported Waypoint backup.');
+      throw const FormatException(
+        'Invalid or unsupported Waypoint backup.',
+      );
     }
 
     final backupTrips = decoded['trips'] as List<dynamic>;
@@ -97,26 +103,28 @@ class JsonBackupService {
       parsedTrips.add(MapEntry(trip, stops));
     }
 
-    for (final entry in parsedTrips) {
-      final trip = entry.key;
-      final existingTrip = await _tripRepository.getTripById(trip.id);
+    // Import all records in one transaction.
+    final db = await _appDatabase.database;
 
-      if (existingTrip == null) {
-        await _tripRepository.insertTrip(trip);
-      } else {
-        await _tripRepository.updateTrip(trip);
-      }
+    await db.transaction((txn) async {
+      for (final entry in parsedTrips) {
+        final trip = entry.key;
 
-      for (final stop in entry.value) {
-        final existingStop = await _stopRepository.getStopById(stop.id);
+        await txn.insert(
+          'trips',
+          trip.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
 
-        if (existingStop == null) {
-          await _stopRepository.insertStop(stop);
-        } else {
-          await _stopRepository.updateStop(stop);
+        for (final stop in entry.value) {
+          await txn.insert(
+            'stops',
+            stop.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
       }
-    }
+    });
 
     return parsedTrips.length;
   }
