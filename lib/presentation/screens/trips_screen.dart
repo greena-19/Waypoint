@@ -1,12 +1,50 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/notification_service.dart';
 import '../providers/trips_provider.dart';
 import 'trip_detail_screen.dart';
 import 'trip_editor_screen.dart';
 
 class TripsScreen extends ConsumerWidget {
   const TripsScreen({super.key});
+
+  int _getReminderId(String tripId) {
+    var hash = 0x811c9dc5;
+
+    for (final character in tripId.codeUnits) {
+      hash = ((hash ^ character) * 0x01000193) & 0x7fffffff;
+    }
+
+    return hash;
+  }
+
+  Future<void> _syncTripReminder(TripSummary trip) async {
+    final startDate = trip.startDate;
+
+    final reminderTime = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day - 1,
+      9,
+    );
+
+    final notificationService = NotificationService.instance;
+    final reminderId = _getReminderId(trip.id);
+
+    if (!reminderTime.isAfter(DateTime.now())) {
+      await notificationService.cancelReminder(reminderId);
+      return;
+    }
+
+    await notificationService.scheduleReminder(
+      id: reminderId,
+      title: 'Your trip is tomorrow!',
+      body: 'Get ready for ${trip.name} in ${trip.destination}.',
+      scheduledTime: reminderTime,
+    );
+  }
 
   Future<void> _editTrip(
     BuildContext context,
@@ -21,11 +59,36 @@ class TripsScreen extends ConsumerWidget {
 
     if (!context.mounted || updatedTrip == null) return;
 
-    ref.read(tripsProvider.notifier).updateTrip(index, updatedTrip);
+    try {
+      await ref
+          .read(tripsProvider.notifier)
+          .updateTrip(index, updatedTrip);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Trip updated successfully')));
+      if (!context.mounted) return;
+
+      String message = 'Trip updated successfully.';
+
+      try {
+        await _syncTripReminder(updatedTrip);
+        message = 'Trip updated and reminder refreshed.';
+      } catch (error) {
+        message = 'Trip updated, but its reminder could not be refreshed.';
+      }
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not update trip: $error'),
+        ),
+      );
+    }
   }
 
   Future<void> _deleteTrip(
@@ -38,7 +101,9 @@ class TripsScreen extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Trip'),
-        content: Text('Are you sure you want to delete "${trip.name}"?'),
+        content: Text(
+          'Are you sure you want to delete "${trip.name}"?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -54,11 +119,38 @@ class TripsScreen extends ConsumerWidget {
 
     if (!context.mounted || shouldDelete != true) return;
 
-    ref.read(tripsProvider.notifier).deleteTrip(index);
+    try {
+      await ref
+          .read(tripsProvider.notifier)
+          .deleteTrip(index);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Trip deleted successfully')));
+      if (!context.mounted) return;
+
+      String message = 'Trip deleted successfully.';
+
+      try {
+        await NotificationService.instance.cancelReminder(
+          _getReminderId(trip.id),
+        );
+        message = 'Trip deleted and its reminder cancelled.';
+      } catch (error) {
+        message = 'Trip deleted, but its reminder could not be cancelled.';
+      }
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not delete trip: $error'),
+        ),
+      );
+    }
   }
 
   @override
@@ -66,7 +158,9 @@ class TripsScreen extends ConsumerWidget {
     final trips = ref.watch(tripsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Trips')),
+      appBar: AppBar(
+        title: const Text('My Trips'),
+      ),
       body: trips.isEmpty
           ? const Center(
               child: Column(
@@ -74,7 +168,10 @@ class TripsScreen extends ConsumerWidget {
                 children: [
                   Icon(Icons.route, size: 80),
                   SizedBox(height: 16),
-                  Text('Plan your first trip', style: TextStyle(fontSize: 22)),
+                  Text(
+                    'Plan your first trip',
+                    style: TextStyle(fontSize: 22),
+                  ),
                   SizedBox(height: 8),
                   Text('Your adventures start here!'),
                 ],
@@ -129,7 +226,8 @@ class TripsScreen extends ConsumerWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => TripDetailScreen(trip: trip),
+                          builder: (context) =>
+                              TripDetailScreen(trip: trip),
                         ),
                       );
                     },
@@ -141,7 +239,9 @@ class TripsScreen extends ConsumerWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const TripEditorScreen()),
+            MaterialPageRoute(
+              builder: (context) => const TripEditorScreen(),
+            ),
           );
         },
         tooltip: 'Add Trip',
@@ -170,7 +270,9 @@ class _EditTripDialogState extends State<_EditTripDialog> {
   void initState() {
     super.initState();
 
-    _nameController = TextEditingController(text: widget.trip.name);
+    _nameController = TextEditingController(
+      text: widget.trip.name,
+    );
 
     _destinationController = TextEditingController(
       text: widget.trip.destination,
@@ -185,9 +287,7 @@ class _EditTripDialogState extends State<_EditTripDialog> {
   }
 
   void _saveChanges() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     final updatedTrip = widget.trip.copyWith(
       name: _nameController.text.trim(),
@@ -209,7 +309,9 @@ class _EditTripDialogState extends State<_EditTripDialog> {
             children: [
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Trip Name'),
+                decoration: const InputDecoration(
+                  labelText: 'Trip Name',
+                ),
                 validator: (value) {
                   final name = value?.trim() ?? '';
 
@@ -224,12 +326,12 @@ class _EditTripDialogState extends State<_EditTripDialog> {
                   return null;
                 },
               ),
-
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _destinationController,
-                decoration: const InputDecoration(labelText: 'Destination'),
+                decoration: const InputDecoration(
+                  labelText: 'Destination',
+                ),
                 validator: (value) {
                   final destination = value?.trim() ?? '';
 
@@ -250,9 +352,7 @@ class _EditTripDialogState extends State<_EditTripDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(

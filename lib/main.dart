@@ -5,10 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'presentation/screens/trips_screen.dart';
 import 'presentation/screens/history_screen.dart';
 import 'presentation/screens/settings_screen.dart';
+import 'presentation/providers/trips_provider.dart';
+import 'services/notification_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: WaypointApp()));
+
+  await NotificationService.instance.initialize();
+
+  runApp(
+    const ProviderScope(
+      child: WaypointApp(),
+    ),
+  );
 }
 
 class WaypointApp extends StatelessWidget {
@@ -25,7 +34,79 @@ class WaypointApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const MainNavigation(),
+      home: const TripLoader(),
+    );
+  }
+}
+
+class TripLoader extends ConsumerStatefulWidget {
+  const TripLoader({super.key});
+
+  @override
+  ConsumerState<TripLoader> createState() => _TripLoaderState();
+}
+
+class _TripLoaderState extends ConsumerState<TripLoader> {
+  late Future<void> _loadingFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _loadingFuture = ref.read(tripsProvider.notifier).loadTrips();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _loadingFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Could not load your trips.',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('${snapshot.error}'),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () {
+                        setState(() {
+                          _loadingFuture =
+                              ref.read(tripsProvider.notifier).loadTrips();
+                        });
+                      },
+                      child: const Text('Try Again'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return const MainNavigation();
+      },
     );
   }
 }
