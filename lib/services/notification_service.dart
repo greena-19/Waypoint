@@ -108,11 +108,12 @@ class NotificationService {
     required String body,
     required DateTime scheduledTime,
   }) async {
-    await initialize();
-
+    // Validate the date before initializing the notification plugin.
     if (!scheduledTime.isAfter(DateTime.now())) {
       throw ArgumentError('Reminder time must be in the future.');
     }
+
+    await initialize();
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
