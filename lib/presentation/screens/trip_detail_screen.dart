@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/trip_stop.dart';
-import '../providers/stops_provider.dart';
+import '../../data/models/stop_model.dart';
+import '../../data/repositories/stop_repository.dart';
+import '../../services/stop_tracking_service.dart';
 import '../providers/trips_provider.dart';
 import 'stop_editor_screen.dart';
 
@@ -16,66 +17,71 @@ class TripDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
-  String _formatDate(DateTime date) {
-    return '${date.month}/${date.day}/${date.year}';
+  final StopRepository _stopRepository = StopRepository();
+  final StopTrackingService _trackingService = StopTrackingService();
+
+  late Future<List<StopModel>> _stopsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStops();
   }
 
-  String _formatTripType(String type) {
-    switch (type) {
-      case 'day':
-        return 'Day Trip';
-      case 'weekend':
-        return 'Weekend Trip';
-      case 'multi_day':
-        return 'Multi-day Trip';
-      default:
-        return type;
-    }
+  void _loadStops() {
+    _stopsFuture = _stopRepository.getStopsForTrip(widget.trip.id);
+  }
+
+  Future<void> _refreshStops() async {
+    setState(_loadStops);
+    await _stopsFuture;
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _addStop() async {
-    final newStop = await Navigator.push<TripStop>(
+    final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => StopEditorScreen(tripId: widget.trip.id),
       ),
     );
 
-    if (!mounted || newStop == null) return;
+    if (!mounted || saved != true) return;
 
-    ref.read(stopsProvider.notifier).addStop(newStop);
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Stop added successfully')));
+    try {
+      await _refreshStops();
+      _showMessage('Stop added successfully');
+    } catch (error) {
+      _showMessage('Could not refresh stops: $error');
+    }
   }
 
-  Future<void> _editStop(TripStop existingStop) async {
-    final updatedStop = await Navigator.push<TripStop>(
+  Future<void> _editStop(StopModel stop) async {
+    final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => StopEditorScreen(
-          tripId: widget.trip.id,
-          existingStop: existingStop,
-        ),
+        builder: (context) =>
+            StopEditorScreen(tripId: widget.trip.id, existingStop: stop),
       ),
     );
 
-    if (!mounted || updatedStop == null) return;
+    if (!mounted || saved != true) return;
 
-    final stopStillExists = ref
-        .read(stopsProvider)
-        .any((stop) => stop.id == existingStop.id);
-
-    if (!stopStillExists) return;
-
-    ref.read(stopsProvider.notifier).updateStop(updatedStop);
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Stop updated successfully')));
+    try {
+      await _refreshStops();
+      _showMessage('Stop updated successfully');
+    } catch (error) {
+      _showMessage('Could not refresh stops: $error');
+    }
   }
 
-  Future<void> _deleteStop(TripStop stop) async {
+  Future<void> _deleteStop(StopModel stop) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -96,150 +102,124 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
 
     if (!mounted || shouldDelete != true) return;
 
-    final stopStillExists = ref
-        .read(stopsProvider)
-        .any((item) => item.id == stop.id);
+    try {
+      await _stopRepository.deleteStop(stop.id);
 
-    if (!stopStillExists) return;
+      if (!mounted) return;
 
-    ref.read(stopsProvider.notifier).deleteStop(stop.id);
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Stop deleted successfully')));
+      await _refreshStops();
+      _showMessage('Stop deleted successfully');
+    } catch (error) {
+      _showMessage('Could not delete stop: $error');
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final trips = ref.watch(tripsProvider);
+  Future<void> _checkIn(StopModel stop) async {
+    try {
+      await _trackingService.checkIn(stop.id);
 
-    final tripIndex = trips.indexWhere((item) => item.id == widget.trip.id);
+      if (!mounted) return;
 
-    // Use the latest trip details when available.
-    final trip = tripIndex >= 0 ? trips[tripIndex] : widget.trip;
+      await _refreshStops();
+      _showMessage('Checked in to ${stop.name}');
+    } catch (error) {
+      _showMessage('Could not check in: $error');
+    }
+  }
 
-    final stops = ref
-        .watch(stopsProvider)
-        .where((stop) => stop.tripId == trip.id)
-        .toList();
+  Future<void> _checkOut(StopModel stop) async {
+    try {
+      await _trackingService.checkOut(stop.id);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Trip Details')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    trip.name,
-                    softWrap: true,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.location_on_outlined),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(trip.destination, softWrap: true)),
-                    ],
-                  ),
-                ],
+      if (!mounted) return;
+
+      await _refreshStops();
+      _showMessage('Checked out of ${stop.name}');
+    } catch (error) {
+      _showMessage('Could not check out: $error');
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.month}/${date.day}/${date.year}';
+  }
+
+  String _formatTripType(String type) {
+    switch (type) {
+      case 'day':
+        return 'Day Trip';
+      case 'weekend':
+        return 'Weekend Trip';
+      case 'multi_day':
+        return 'Multi-day Trip';
+      default:
+        return type;
+    }
+  }
+
+  Widget _buildStops(List<StopModel> stops) {
+    if (stops.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Icon(
+                Icons.add_location_alt_outlined,
+                size: 56,
+                color: Colors.grey,
               ),
-            ),
+              SizedBox(height: 12),
+              Text('No stops added yet', textAlign: TextAlign.center),
+              SizedBox(height: 4),
+              Text(
+                'Add your first stop to start planning.',
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
+        ),
+      );
+    }
 
-          const SizedBox(height: 20),
+    return Column(
+      children: stops.map((stop) {
+        final isCompleted = stop.status == 'completed';
+        final isInProgress = stop.status == 'in_progress';
 
-          Card(
+        return Card(
+          key: ValueKey(stop.id),
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ListTile(
-                  leading: const Icon(Icons.calendar_month_outlined),
-                  title: const Text('Trip Dates'),
-                  subtitle: Text(
-                    '${_formatDate(trip.startDate)} - '
-                    '${_formatDate(trip.endDate)}',
-                    softWrap: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    isCompleted
+                        ? Icons.check_circle
+                        : isInProgress
+                        ? Icons.directions_walk
+                        : Icons.place_outlined,
+                    color: isCompleted ? Colors.green : null,
                   ),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.category_outlined),
-                  title: const Text('Trip Type'),
-                  subtitle: Text(_formatTripType(trip.tripType)),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.account_balance_wallet_outlined),
-                  title: const Text('Budget'),
-                  subtitle: Text('\$${trip.budget.toStringAsFixed(2)}'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          Text(
-            'Trip Stops (${stops.length})',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-
-          const SizedBox(height: 16),
-
-          if (stops.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.add_location_alt_outlined,
-                      size: 56,
-                      color: Colors.grey,
-                    ),
-                    SizedBox(height: 12),
-                    Text('No stops added yet', textAlign: TextAlign.center),
-                    SizedBox(height: 4),
-                    Text(
-                      'Add your first stop to start planning.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            ...stops.map((stop) {
-              return Card(
-                key: ValueKey(stop.id),
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: const Icon(Icons.place_outlined),
                   title: Text(stop.name, softWrap: true),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(stop.location, softWrap: true),
                       const SizedBox(height: 4),
-                      Text(
-                        'Duration: '
-                        '${stop.plannedDurationMinutes} minutes',
-                        softWrap: true,
-                      ),
+                      Text('Planned: ${stop.plannedDuration} minutes'),
+                      if (stop.actualDuration != null)
+                        Text('Actual: ${stop.actualDuration} minutes'),
                       if (stop.notes.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text('Notes: ${stop.notes}', softWrap: true),
                       ],
+                      const SizedBox(height: 4),
+                      Text('Status: ${stop.status.replaceAll('_', ' ')}'),
                     ],
                   ),
                   trailing: PopupMenuButton<String>(
@@ -251,18 +231,157 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                         _deleteStop(stop);
                       }
                     },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit Stop')),
-                      PopupMenuItem(
+                    itemBuilder: (context) => [
+                      if (!isInProgress && !isCompleted)
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Text('Edit Stop'),
+                        ),
+                      const PopupMenuItem(
                         value: 'delete',
                         child: Text('Delete Stop'),
                       ),
                     ],
                   ),
                 ),
-              );
-            }),
-        ],
+                const SizedBox(height: 8),
+                if (isCompleted)
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Visit completed'),
+                  )
+                else if (isInProgress)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => _checkOut(stop),
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Check Out'),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => _checkIn(stop),
+                      icon: const Icon(Icons.login),
+                      label: const Text('Check In'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trips = ref.watch(tripsProvider);
+
+    final tripIndex = trips.indexWhere((item) => item.id == widget.trip.id);
+
+    final trip = tripIndex >= 0 ? trips[tripIndex] : widget.trip;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Trip Details')),
+      body: FutureBuilder<List<StopModel>>(
+        future: _stopsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Could not load trip stops.'),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () {
+                      setState(_loadStops);
+                    },
+                    child: const Text('Try Again'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final stops = snapshot.data ?? [];
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        trip.name,
+                        softWrap: true,
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.location_on_outlined),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(trip.destination, softWrap: true),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Card(
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.calendar_month_outlined),
+                      title: const Text('Trip Dates'),
+                      subtitle: Text(
+                        '${_formatDate(trip.startDate)} - '
+                        '${_formatDate(trip.endDate)}',
+                        softWrap: true,
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.category_outlined),
+                      title: const Text('Trip Type'),
+                      subtitle: Text(_formatTripType(trip.tripType)),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                      ),
+                      title: const Text('Budget'),
+                      subtitle: Text('\$${trip.budget.toStringAsFixed(2)}'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Trip Stops (${stops.length})',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              _buildStops(stops),
+            ],
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addStop,

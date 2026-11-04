@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/trip_stop.dart';
+import '../../data/models/stop_model.dart';
+import '../../data/repositories/stop_repository.dart';
 import '../widgets/duration_suggestion_card.dart';
 
 class StopEditorScreen extends StatefulWidget {
   final String tripId;
-  final TripStop? existingStop;
+  final StopModel? existingStop;
 
   const StopEditorScreen({super.key, required this.tripId, this.existingStop});
 
@@ -16,19 +17,18 @@ class StopEditorScreen extends StatefulWidget {
 
 class _StopEditorScreenState extends State<StopEditorScreen> {
   final _formKey = GlobalKey<FormState>();
+  final StopRepository _repository = StopRepository();
 
   late final TextEditingController _nameController;
   late final TextEditingController _locationController;
   late final TextEditingController _durationController;
   late final TextEditingController _notesController;
 
-  // Temporary demonstration value.
-  // Replace with the real duration calculation
-  // during database and repository integration.
   static const int _demoSuggestedDurationMinutes = 90;
 
   bool _showSuggestion = false;
   bool _attemptedSave = false;
+  bool _isSaving = false;
 
   bool get _isEditing => widget.existingStop != null;
 
@@ -39,13 +39,10 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
     final stop = widget.existingStop;
 
     _nameController = TextEditingController(text: stop?.name ?? '');
-
     _locationController = TextEditingController(text: stop?.location ?? '');
-
     _durationController = TextEditingController(
-      text: (stop?.plannedDurationMinutes ?? 60).toString(),
+      text: (stop?.plannedDuration ?? 60).toString(),
     );
-
     _notesController = TextEditingController(text: stop?.notes ?? '');
   }
 
@@ -92,27 +89,58 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
     });
   }
 
-  void _saveStop() {
+  Future<void> _saveStop() async {
+    if (_isSaving) return;
+
     setState(() {
       _attemptedSave = true;
     });
 
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    final stop = TripStop(
-      id:
-          widget.existingStop?.id ??
-          DateTime.now().microsecondsSinceEpoch.toString(),
+    final existing = widget.existingStop;
+
+    final stop = StopModel(
+      id: existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
       tripId: widget.tripId,
       name: _nameController.text.trim(),
       location: _locationController.text.trim(),
-      plannedDurationMinutes: int.parse(_durationController.text.trim()),
+      plannedDuration: int.parse(_durationController.text.trim()),
       notes: _notesController.text.trim(),
+
+      // Preserve existing tracking information when editing.
+      actualDuration: existing?.actualDuration,
+      checkInTime: existing?.checkInTime,
+      checkOutTime: existing?.checkOutTime,
+      status: existing?.status ?? 'planned',
     );
 
-    Navigator.pop(context, stop);
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      if (_isEditing) {
+        await _repository.updateStop(stop);
+      } else {
+        await _repository.insertStop(stop);
+      }
+
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not save stop: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   @override
@@ -143,18 +171,13 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
                   prefixIcon: Icon(Icons.place_outlined),
                 ),
                 validator: (value) {
-                  final name = value?.trim() ?? '';
-
-                  if (name.isEmpty) {
+                  if ((value?.trim() ?? '').isEmpty) {
                     return 'Please enter a stop name';
                   }
-
                   return null;
                 },
               ),
-
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _locationController,
                 textCapitalization: TextCapitalization.words,
@@ -167,18 +190,13 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
                   prefixIcon: Icon(Icons.location_on_outlined),
                 ),
                 validator: (value) {
-                  final location = value?.trim() ?? '';
-
-                  if (location.isEmpty) {
+                  if ((value?.trim() ?? '').isEmpty) {
                     return 'Please enter a location';
                   }
-
                   return null;
                 },
               ),
-
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _durationController,
                 keyboardType: TextInputType.number,
@@ -207,15 +225,12 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
                   return null;
                 },
               ),
-
               const SizedBox(height: 12),
-
               OutlinedButton.icon(
-                onPressed: _showDurationSuggestion,
+                onPressed: _isSaving ? null : _showDurationSuggestion,
                 icon: const Icon(Icons.auto_awesome_outlined),
                 label: const Text('Get Duration Suggestion'),
               ),
-
               if (_showSuggestion) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -230,9 +245,7 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
                   onDismiss: _dismissSuggestion,
                 ),
               ],
-
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _notesController,
                 keyboardType: TextInputType.multiline,
@@ -246,15 +259,24 @@ class _StopEditorScreenState extends State<StopEditorScreen> {
                   prefixIcon: Icon(Icons.notes_outlined),
                 ),
               ),
-
               const SizedBox(height: 24),
-
               FilledButton.icon(
-                onPressed: _saveStop,
-                icon: const Icon(Icons.save_outlined),
-                label: Text(_isEditing ? 'Save Changes' : 'Save Stop'),
+                onPressed: _isSaving ? null : _saveStop,
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(
+                  _isSaving
+                      ? 'Saving...'
+                      : _isEditing
+                      ? 'Save Changes'
+                      : 'Save Stop',
+                ),
               ),
-
               const SizedBox(height: 24),
             ],
           ),

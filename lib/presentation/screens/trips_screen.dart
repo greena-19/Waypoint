@@ -1,13 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers/stops_provider.dart';
+import '../../services/notification_service.dart';
 import '../providers/trips_provider.dart';
 import 'trip_detail_screen.dart';
 import 'trip_editor_screen.dart';
 
 class TripsScreen extends ConsumerWidget {
   const TripsScreen({super.key});
+
+  int _getReminderId(String tripId) {
+    var hash = 0x811c9dc5;
+    for (final character in tripId.codeUnits) {
+      hash = ((hash ^ character) * 0x01000193) & 0x7fffffff;
+    }
+    return hash;
+  }
+
+  Future<void> _syncTripReminder(TripSummary trip) async {
+    final startDate = trip.startDate;
+    final reminderTime = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day - 1,
+      9,
+    );
+
+    final reminderId = _getReminderId(trip.id);
+    final service = NotificationService.instance;
+
+    if (!reminderTime.isAfter(DateTime.now())) {
+      await service.cancelReminder(reminderId);
+      return;
+    }
+
+    await service.scheduleReminder(
+      id: reminderId,
+      title: 'Your trip is tomorrow!',
+      body: 'Get ready for ${trip.name} in ${trip.destination}.',
+      scheduledTime: reminderTime,
+    );
+  }
 
   Future<void> _editTrip(
     BuildContext context,
@@ -23,14 +56,33 @@ class TripsScreen extends ConsumerWidget {
 
     final trips = ref.read(tripsProvider);
     final index = trips.indexWhere((item) => item.id == trip.id);
-
     if (index == -1) return;
 
-    ref.read(tripsProvider.notifier).updateTrip(index, updatedTrip);
+    try {
+      await ref.read(tripsProvider.notifier).updateTrip(index, updatedTrip);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Trip updated successfully')));
+      if (!context.mounted) return;
+
+      var message = 'Trip updated successfully.';
+
+      try {
+        await _syncTripReminder(updatedTrip);
+        message = 'Trip updated and reminder refreshed.';
+      } catch (error) {
+        message = 'Trip updated, but its reminder could not be refreshed.';
+      }
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update trip: $error')));
+    }
   }
 
   Future<void> _deleteTrip(
@@ -60,15 +112,35 @@ class TripsScreen extends ConsumerWidget {
 
     final trips = ref.read(tripsProvider);
     final index = trips.indexWhere((item) => item.id == trip.id);
-
     if (index == -1) return;
 
-    ref.read(tripsProvider.notifier).deleteTrip(index);
-    ref.read(stopsProvider.notifier).deleteStopsForTrip(trip.id);
+    try {
+      await ref.read(tripsProvider.notifier).deleteTrip(index);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Trip deleted successfully')));
+      if (!context.mounted) return;
+
+      var message = 'Trip deleted successfully.';
+
+      try {
+        await NotificationService.instance.cancelReminder(
+          _getReminderId(trip.id),
+        );
+        message = 'Trip deleted and its reminder cancelled.';
+      } catch (error) {
+        message = 'Trip deleted, but its reminder could not be cancelled.';
+      }
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not delete trip: $error')));
+    }
   }
 
   @override
